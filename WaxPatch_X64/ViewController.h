@@ -8,8 +8,12 @@
 
 #import <UIKit/UIKit.h>
 
-@interface ViewController : UIViewController
+@interface ViewController : UIViewController <UIAlertViewDelegate>
 
+@property (nonatomic, weak) IBOutlet UILabel *lblMessage;
+
+- (IBAction)click:(id)sender;
+- (IBAction)loadLua:(id)sender;
 
 @end
 
