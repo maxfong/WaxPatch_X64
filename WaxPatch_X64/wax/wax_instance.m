@@ -15,6 +15,14 @@
 #import "lauxlib.h"
 #import "lobject.h"
 
+struct __va_list_tag {
+    unsigned int gp_offset;
+    unsigned int fp_offset;
+    void *overflow_arg_area;
+    void *reg_save_area;
+};
+typedef struct __va_list_tag __va_list_tag;
+
 static int __index(lua_State *L);
 static int __newindex(lua_State *L);
 static int __gc(lua_State *L);
@@ -601,14 +609,32 @@ static int pcallUserdata(lua_State *L, id self, SEL selector, va_list args) {
     NSMethodSignature *signature = [self methodSignatureForSelector:selector];
     int nargs = [signature numberOfArguments] - 1; // Don't send in the _cmd argument, only self
     int nresults = [signature methodReturnLength] ? 1 : 0;
-        
+    
+    void * usedArgs;
+    bool is64 = false;
+    bool changed = false;
+#ifdef __LP64__
+    void * argList = ((__va_list_tag*)args)->reg_save_area + ((__va_list_tag*)args)->gp_offset;
+    usedArgs = argList;
+    is64 = true;
+#else
+    usedArgs = args;
+#endif
+    
     for (int i = 2; i < [signature numberOfArguments]; i++) { // start at 2 because to skip the automatic self and _cmd arugments
+//        const char *type = [signature getArgumentTypeAtIndex:i];
+//        int size = wax_sizeOfTypeDescription(type);
+//        args += size; // HACK! Since va_arg requires static type, I manually increment the args
+        if(i>5 && is64 && !changed){
+            usedArgs = ((__va_list_tag*)args)->overflow_arg_area;
+            changed = true;
+        }
         const char *type = [signature getArgumentTypeAtIndex:i];
-        int size = wax_sizeOfTypeDescription(type);
-        args += size; // HACK! Since va_arg requires static type, I manually increment the args
+        int size = wax_fromObjc(L, type, usedArgs);
+        usedArgs += size;
     }
 
-    if (wax_pcall(L, nargs, nresults)) { // Userdata will allways be the first object sent to the function  
+    if (wax_pcall(L, nargs, nresults)) { // Userdata will allways be the first object sent to the function
         goto error;
     }
     

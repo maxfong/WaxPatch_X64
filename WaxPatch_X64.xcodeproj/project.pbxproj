@@ -192,6 +192,7 @@
 		A91734E21A839CA400C887B8 /* wax_struct.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = wax_struct.m; sourceTree = "<group>"; };
 		A942FE631A83A38C005E11B0 /* load.lua */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = load.lua; sourceTree = "<group>"; };
 		A942FE641A83A38C005E11B0 /* ViewController.lua */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ViewController.lua; sourceTree = "<group>"; };
+		A9CE6BBF1A8457F70051A2ED /* wax_stdlib_64.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = wax_stdlib_64.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -293,6 +294,7 @@
 				A91734DE1A839CA400C887B8 /* wax_server.h */,
 				A91734DF1A839CA400C887B8 /* wax_server.m */,
 				A91734E01A839CA400C887B8 /* wax_stdlib.h */,
+				A9CE6BBF1A8457F70051A2ED /* wax_stdlib_64.h */,
 				A91734E11A839CA400C887B8 /* wax_struct.h */,
 				A91734E21A839CA400C887B8 /* wax_struct.m */,
 			);
