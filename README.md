@@ -3,4 +3,6 @@
 
 参考https://github.com/felipejfc/wax_x86-64 进一步修复，支持回调使用
 
-但是iphone6以上设备有一些问题，具体参考wax_x86-64的The Problem
+arm64设备crash问题已修复
+
+arm64设备 delegate crash问题正在修复...

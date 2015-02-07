@@ -15,14 +15,6 @@
 #import "lauxlib.h"
 #import "lobject.h"
 
-struct __va_list_tag {
-    unsigned int gp_offset;
-    unsigned int fp_offset;
-    void *overflow_arg_area;
-    void *reg_save_area;
-};
-typedef struct __va_list_tag __va_list_tag;
-
 static int __index(lua_State *L);
 static int __newindex(lua_State *L);
 static int __gc(lua_State *L);
@@ -36,7 +28,7 @@ static int superMethodClosure(lua_State *L);
 static int customInitMethodClosure(lua_State *L);
 
 static BOOL overrideMethod(lua_State *L, wax_instance_userdata *instanceUserdata);
-static int pcallUserdata(lua_State *L, id self, SEL selector, va_list args);
+static int pcallUserdata(lua_State *L, id self, SEL selector, void ** args);
 
 static const struct luaL_Reg metaFunctions[] = {
     {"__index", __index},
@@ -576,10 +568,42 @@ static int customInitMethodClosure(lua_State *L) {
     return 1;
 }
 
+void myForwardInvocation(id self, SEL _cmd, NSInvocation * inv){
+    NSInteger n = [[inv methodSignature] numberOfArguments];
+    void **arguements = calloc(sizeof(void*), n);
+    id *idArguements = calloc(sizeof(id*), n);
+    
+    for (int i = 0; i < n-2; i++) {
+        id __unsafe_unretained arg;
+        [inv getArgument:&arg atIndex:(int)i+2];
+        if(!arg){
+            arg = [NSNull null];
+        }
+        idArguements[i] = arg;
+    }
+    
+    for(int i = 0 ; i < n-2 ; i++){
+        arguements[i] = &idArguements[i];
+    }
+    
+    //HACK
+    const char *selectorName = sel_getName([inv selector]);
+    char newWaxSelectorName[strlen(selectorName) + 10];
+    strcpy(newWaxSelectorName, "WAX");
+    strcat(newWaxSelectorName, selectorName);
+    
+    SEL newWaxSelector = sel_getUid(newWaxSelectorName);
+    if(class_respondsToSelector([[inv target] class], newWaxSelector)) {
+        [inv setSelector:newWaxSelector];
+    }
+    [inv setArgument:arguements atIndex:2];
+    [inv invoke];
+}
+
 #pragma mark Override Methods
 #pragma mark ---------------------
 
-static int pcallUserdata(lua_State *L, id self, SEL selector, va_list args) {
+static int pcallUserdata(lua_State *L, id self, SEL selector, void ** args) {
     BEGIN_STACK_MODIFY(L)    
     
     if (![[NSThread currentThread] isEqual:[NSThread mainThread]]) NSLog(@"PCALLUSERDATA: OH NO SEPERATE THREAD");
@@ -591,6 +615,14 @@ static int pcallUserdata(lua_State *L, id self, SEL selector, va_list args) {
         BOOL isClass = self == [self class];
         wax_instance_create(L, self, isClass); // If it already exists, then it will just return without doing anything
         lua_pop(L, 1); // Pops userdata off
+    }
+    
+    const char *selectorName = sel_getName(selector);
+    
+    if (strncmp(selectorName, "WAX", 3)==0){
+        char* newSelectorName = selectorName+3;
+        SEL newSelector = sel_getUid(newSelectorName);
+        selector = newSelector;
     }
     
     // Find the function... could be in the object or in the class
@@ -610,28 +642,12 @@ static int pcallUserdata(lua_State *L, id self, SEL selector, va_list args) {
     int nargs = [signature numberOfArguments] - 1; // Don't send in the _cmd argument, only self
     int nresults = [signature methodReturnLength] ? 1 : 0;
     
-    void * usedArgs;
-    bool is64 = false;
-    bool changed = false;
-#ifdef __LP64__
-    void * argList = ((__va_list_tag*)args)->reg_save_area + ((__va_list_tag*)args)->gp_offset;
-    usedArgs = argList;
-    is64 = true;
-#else
-    usedArgs = args;
-#endif
-    
     for (int i = 2; i < [signature numberOfArguments]; i++) { // start at 2 because to skip the automatic self and _cmd arugments
 //        const char *type = [signature getArgumentTypeAtIndex:i];
 //        int size = wax_sizeOfTypeDescription(type);
 //        args += size; // HACK! Since va_arg requires static type, I manually increment the args
-        if(i>5 && is64 && !changed){
-            usedArgs = ((__va_list_tag*)args)->overflow_arg_area;
-            changed = true;
-        }
         const char *type = [signature getArgumentTypeAtIndex:i];
-        int size = wax_fromObjc(L, type, usedArgs);
-        usedArgs += size;
+        wax_fromObjc(L, type, &args[i-2]);
     }
 
     if (wax_pcall(L, nargs, nresults)) { // Userdata will allways be the first object sent to the function
@@ -649,25 +665,19 @@ error:
 #define WAX_METHOD_NAME(_type_) wax_##_type_##_call
 
 #define WAX_METHOD(_type_) \
-static _type_ WAX_METHOD_NAME(_type_)(id self, SEL _cmd, ...) { \
-va_list args; \
-va_start(args, _cmd); \
-va_list args_copy; \
-va_copy(args_copy, args); \
+static _type_ WAX_METHOD_NAME(_type_)(id self, SEL _cmd, void ** args_copy) { \
 /* Grab the static L... this is a hack */ \
 lua_State *L = wax_currentLuaState(); \
 BEGIN_STACK_MODIFY(L); \
 int result = pcallUserdata(L, self, _cmd, args_copy); \
-va_end(args_copy); \
-va_end(args); \
 if (result == -1) { \
-    luaL_error(L, "Error calling '%s' on '%s'\n%s", _cmd, [[self description] UTF8String], lua_tostring(L, -1)); \
+luaL_error(L, "Error calling '%s' on '%s'\n%s", _cmd, [[self description] UTF8String], lua_tostring(L, -1)); \
 } \
 else if (result == 0) { \
-    _type_ returnValue; \
-    bzero(&returnValue, sizeof(_type_)); \
-    END_STACK_MODIFY(L, 0) \
-    return returnValue; \
+_type_ returnValue; \
+bzero(&returnValue, sizeof(_type_)); \
+END_STACK_MODIFY(L, 0) \
+return returnValue; \
 } \
 \
 NSMethodSignature *signature = [self methodSignatureForSelector:_cmd]; \
@@ -803,15 +813,22 @@ static BOOL overrideMethod(lua_State *L, wax_instance_userdata *instanceUserdata
         }
 		
         // OVERRIDE if exists
-		id metaclass = objc_getMetaClass(object_getClassName(klass));
-//        success = class_addMethod(klass, selector, imp, typeDescription) && class_addMethod(metaclass, selector, imp, typeDescription);
-
+        id metaclass = objc_getMetaClass(object_getClassName(klass));
+        //        success = class_addMethod(klass, selector, imp, typeDescription) && class_addMethod(metaclass, selector, imp, typeDescription);
         IMP instImp = class_respondsToSelector(klass, selector) ? class_getMethodImplementation(klass, selector) : NULL;
         IMP metaImp = class_respondsToSelector(metaclass, selector) ? class_getMethodImplementation(metaclass, selector) : NULL;
         if(instImp) {
             // original selector is reserved in ORIGxxxx
-            IMP prevImp = class_replaceMethod(klass, selector, imp, typeDescription);
+            //Strong HACK!!! I can't stress enought how hacky this is! I'm removing the original method implementation so that when it is called, the call gets forwarded by mine myForwardInvocation
+            IMP prevImp = class_replaceMethod(klass, selector, class_getMethodImplementation(klass, @selector(testesss)), typeDescription);
+            //TODO keep original forwardinvocation and call it!
+            IMP otherImp = class_replaceMethod(klass, @selector(forwardInvocation:), (IMP)myForwardInvocation, "v@:@");
             const char *selectorName = sel_getName(selector);
+            //New
+            char newWaxSelectorName[strlen(selectorName) + 10];
+            strcpy(newWaxSelectorName, "WAX");
+            strcat(newWaxSelectorName, selectorName);
+            
             char newSelectorName[strlen(selectorName) + 10];
             strcpy(newSelectorName, "ORIG");
             strcat(newSelectorName, selectorName);
@@ -819,16 +836,32 @@ static BOOL overrideMethod(lua_State *L, wax_instance_userdata *instanceUserdata
             if(!class_respondsToSelector(klass, newSelector)) {
                 class_addMethod(klass, newSelector, prevImp, typeDescription);
             }
+            //New
+            SEL newWaxSelector = sel_getUid(newWaxSelectorName);
+            if(!class_respondsToSelector(klass, newWaxSelector)) {
+                class_addMethod(klass, newWaxSelector, imp, typeDescription);
+            }
             success = YES;
         } else if(metaImp) {
-            IMP prevImp = class_replaceMethod(metaclass, selector, imp, typeDescription);
+            IMP prevImp = class_replaceMethod(klass, selector, class_getMethodImplementation(klass, @selector(testesss)), typeDescription);
+            IMP otherImp = class_replaceMethod(klass, @selector(forwardInvocation:), (IMP)myForwardInvocation, "v@:@");
             const char *selectorName = sel_getName(selector);
+            
+            char newWaxSelectorName[strlen(selectorName) + 10];
+            strcpy(newWaxSelectorName, "WAX");
+            strcat(newWaxSelectorName, selectorName);
+            
             char newSelectorName[strlen(selectorName) + 10];
             strcpy(newSelectorName, "ORIG");
             strcat(newSelectorName, selectorName);
             SEL newSelector = sel_getUid(newSelectorName);
             if(!class_respondsToSelector(metaclass, newSelector)) {
                 class_addMethod(metaclass, newSelector, prevImp, typeDescription);
+            }
+            
+            SEL newWaxSelector = sel_getUid(newWaxSelectorName);
+            if(!class_respondsToSelector(klass, newWaxSelector)) {
+                class_addMethod(klass, newWaxSelector, imp, typeDescription);
             }
             success = YES;
         } else {
