@@ -29,7 +29,7 @@
     }
     
     //模拟-移动文件到下载目录
-    [@[@"load", @"ViewController"] enumerateObjectsUsingBlock:^(NSString *name, NSUInteger idx, BOOL *stop) {
+    [@[@"load", @"ViewController", @"ViewControllerA"] enumerateObjectsUsingBlock:^(NSString *name, NSUInteger idx, BOOL *stop) {
         NSString *bundlePath = [[NSBundle mainBundle] pathForResource:name ofType:@"lua"];
         NSString *docPath = [directory stringByAppendingString:[NSString stringWithFormat:@"/%@.lua", name]];
         if ([fileManager fileExistsAtPath:bundlePath] && ![fileManager fileExistsAtPath:docPath]) {

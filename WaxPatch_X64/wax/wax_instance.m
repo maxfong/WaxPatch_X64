@@ -600,12 +600,6 @@ void myForwardInvocation(id self, SEL _cmd, NSInvocation * inv){
     }
 //    [inv setArgument:arguements atIndex:2];
     [inv invoke];
-    
-    for (int i = 0; i < n-2; i++) {
-        free(sharedMemoryForArgs[i]);
-    }
-    
-    free(sharedMemoryForArgs);
 }
 
 #pragma mark Override Methods
