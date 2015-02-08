@@ -28,7 +28,9 @@ static int superMethodClosure(lua_State *L);
 static int customInitMethodClosure(lua_State *L);
 
 static BOOL overrideMethod(lua_State *L, wax_instance_userdata *instanceUserdata);
-static int pcallUserdata(lua_State *L, id self, SEL selector, void ** args);
+static int pcallUserdata(lua_State *L, id self, SEL selector);
+
+void ** sharedMemoryForArgs;
 
 static const struct luaL_Reg metaFunctions[] = {
     {"__index", __index},
@@ -570,7 +572,7 @@ static int customInitMethodClosure(lua_State *L) {
 
 void myForwardInvocation(id self, SEL _cmd, NSInvocation * inv){
     NSInteger n = [[inv methodSignature] numberOfArguments];
-    void **arguements = calloc(sizeof(void*), n);
+    sharedMemoryForArgs = calloc(sizeof(void*), n);
     id *idArguements = calloc(sizeof(id*), n);
     
     for (int i = 0; i < n-2; i++) {
@@ -583,7 +585,7 @@ void myForwardInvocation(id self, SEL _cmd, NSInvocation * inv){
     }
     
     for(int i = 0 ; i < n-2 ; i++){
-        arguements[i] = &idArguements[i];
+        sharedMemoryForArgs[i] = &idArguements[i];
     }
     
     //HACK
@@ -596,14 +598,16 @@ void myForwardInvocation(id self, SEL _cmd, NSInvocation * inv){
     if(class_respondsToSelector([[inv target] class], newWaxSelector)) {
         [inv setSelector:newWaxSelector];
     }
-    [inv setArgument:arguements atIndex:2];
+//    [inv setArgument:arguements atIndex:2];
     [inv invoke];
+    
+    free(sharedMemoryForArgs);
 }
 
 #pragma mark Override Methods
 #pragma mark ---------------------
 
-static int pcallUserdata(lua_State *L, id self, SEL selector, void ** args) {
+static int pcallUserdata(lua_State *L, id self, SEL selector) {
     BEGIN_STACK_MODIFY(L)    
     
     if (![[NSThread currentThread] isEqual:[NSThread mainThread]]) NSLog(@"PCALLUSERDATA: OH NO SEPERATE THREAD");
@@ -647,7 +651,8 @@ static int pcallUserdata(lua_State *L, id self, SEL selector, void ** args) {
 //        int size = wax_sizeOfTypeDescription(type);
 //        args += size; // HACK! Since va_arg requires static type, I manually increment the args
         const char *type = [signature getArgumentTypeAtIndex:i];
-        wax_fromObjc(L, type, &args[i-2]);
+//        wax_fromObjc(L, type, &args[i-2]);
+        wax_fromObjc(L, type, sharedMemoryForArgs[i-2]);
     }
 
     if (wax_pcall(L, nargs, nresults)) { // Userdata will allways be the first object sent to the function
@@ -665,11 +670,11 @@ error:
 #define WAX_METHOD_NAME(_type_) wax_##_type_##_call
 
 #define WAX_METHOD(_type_) \
-static _type_ WAX_METHOD_NAME(_type_)(id self, SEL _cmd, void ** args_copy) { \
+static _type_ WAX_METHOD_NAME(_type_)(id self, SEL _cmd) { \
 /* Grab the static L... this is a hack */ \
 lua_State *L = wax_currentLuaState(); \
 BEGIN_STACK_MODIFY(L); \
-int result = pcallUserdata(L, self, _cmd, args_copy); \
+int result = pcallUserdata(L, self, _cmd); \
 if (result == -1) { \
 luaL_error(L, "Error calling '%s' on '%s'\n%s", _cmd, [[self description] UTF8String], lua_tostring(L, -1)); \
 } \
@@ -843,13 +848,32 @@ static BOOL overrideMethod(lua_State *L, wax_instance_userdata *instanceUserdata
             }
             success = YES;
         } else if(metaImp) {
-            IMP prevImp = class_replaceMethod(klass, selector, class_getMethodImplementation(klass, @selector(testesss)), typeDescription);
-            IMP otherImp = class_replaceMethod(klass, @selector(forwardInvocation:), (IMP)myForwardInvocation, "v@:@");
+//            IMP prevImp = class_replaceMethod(klass, selector, class_getMethodImplementation(klass, @selector(testesss)), typeDescription);
+//            IMP otherImp = class_replaceMethod(klass, @selector(forwardInvocation:), (IMP)myForwardInvocation, "v@:@");
+//            const char *selectorName = sel_getName(selector);
+            
+            IMP prevImp = class_replaceMethod(metaclass, selector, class_getMethodImplementation(metaclass, @selector(testesss)), typeDescription);
+            IMP forwardInvocationOriginalImp = class_replaceMethod(metaclass, @selector(forwardInvocation:), (IMP)myForwardInvocation, "v@:@");
+            
+            //Put the original invocation method
+            const char *forwardSelectorName = sel_getName(@selector(forwardInvocation:));
+            char newForwardSelectorName[strlen(forwardSelectorName) + 10];
+            strcpy(newForwardSelectorName, "ORIG");
+            strcat(newForwardSelectorName, forwardSelectorName);
+            SEL newForwardSelector = sel_getUid(newForwardSelectorName);
+            if(!class_respondsToSelector(metaclass, newForwardSelector)) {
+                class_addMethod(metaclass, newForwardSelector, forwardInvocationOriginalImp, "v@:@");
+            }
+            
             const char *selectorName = sel_getName(selector);
             
             char newWaxSelectorName[strlen(selectorName) + 10];
             strcpy(newWaxSelectorName, "WAX");
             strcat(newWaxSelectorName, selectorName);
+            SEL newWaxSelector = sel_getUid(newWaxSelectorName);
+            if(!class_respondsToSelector(metaclass, newWaxSelector)) {
+                class_addMethod(metaclass, newWaxSelector, imp, typeDescription);
+            }
             
             char newSelectorName[strlen(selectorName) + 10];
             strcpy(newSelectorName, "ORIG");
@@ -859,14 +883,36 @@ static BOOL overrideMethod(lua_State *L, wax_instance_userdata *instanceUserdata
                 class_addMethod(metaclass, newSelector, prevImp, typeDescription);
             }
             
-            SEL newWaxSelector = sel_getUid(newWaxSelectorName);
-            if(!class_respondsToSelector(klass, newWaxSelector)) {
-                class_addMethod(klass, newWaxSelector, imp, typeDescription);
-            }
+//            SEL newWaxSelector = sel_getUid(newWaxSelectorName);
+//            if(!class_respondsToSelector(klass, newWaxSelector)) {
+//                class_addMethod(klass, newWaxSelector, imp, typeDescription);
+//            }
             success = YES;
         } else {
             // add to both instance and class method
-            success = class_addMethod(klass, selector, imp, typeDescription) && class_addMethod(metaclass, selector, imp, typeDescription);
+            const char *selectorName = sel_getName(selector);
+            char newWaxSelectorName[strlen(selectorName) + 10];
+            strcpy(newWaxSelectorName, "WAX");
+            strcat(newWaxSelectorName, selectorName);
+            SEL newWaxSelector = sel_getUid(newWaxSelectorName);
+            
+            IMP forwardInvocationOriginalImpKlass = class_replaceMethod(klass, @selector(forwardInvocation:), (IMP)myForwardInvocation, "v@:@");
+            
+            IMP forwardInvocationOriginalImpMetaClass = class_replaceMethod(metaclass, @selector(forwardInvocation:), (IMP)myForwardInvocation, "v@:@");
+            
+            const char *forwardSelectorName = sel_getName(@selector(forwardInvocation:));
+            char newForwardSelectorName[strlen(forwardSelectorName) + 10];
+            strcpy(newForwardSelectorName, "ORIG");
+            strcat(newForwardSelectorName, forwardSelectorName);
+            SEL newForwardSelector = sel_getUid(newForwardSelectorName);
+            if(!class_respondsToSelector(metaclass, newForwardSelector)) {
+                class_addMethod(klass, newForwardSelector, forwardInvocationOriginalImpKlass, "v@:@");
+                class_addMethod(metaclass, newForwardSelector, forwardInvocationOriginalImpMetaClass, "v@:@");
+            }
+            success = class_addMethod(klass, selector, class_getMethodImplementation(klass, @selector(testesss)), typeDescription) && class_addMethod(metaclass, selector, class_getMethodImplementation(klass, @selector(testesss)), typeDescription);
+            
+            success = class_addMethod(klass, newWaxSelector, imp, typeDescription) && class_addMethod(metaclass, newWaxSelector, imp, typeDescription);
+//            success = class_addMethod(klass, selector, imp, typeDescription) && class_addMethod(metaclass, selector, imp, typeDescription);
         }
         
         if (returnType) free(returnType);
@@ -902,8 +948,28 @@ static BOOL overrideMethod(lua_State *L, wax_instance_userdata *instanceUserdata
             IMP metaImp = class_respondsToSelector(metaclass, selector) ? class_getMethodImplementation(metaclass, selector) : NULL;
             if(instImp) {
                 // original selector is reserved in ORIGxxxx
-                IMP prevImp = class_replaceMethod(klass, selector, imp, typeDescription);
+                IMP prevImp = class_replaceMethod(klass, selector, class_getMethodImplementation(klass, @selector(testesss)), typeDescription);
+                IMP forwardInvocationOriginalImp = class_replaceMethod(klass, @selector(forwardInvocation:), (IMP)myForwardInvocation, "v@:@");
+                
+                //Put the original invocation method
+                const char *forwardSelectorName = sel_getName(@selector(forwardInvocation:));
+                char newForwardSelectorName[strlen(forwardSelectorName) + 10];
+                strcpy(newForwardSelectorName, "ORIG");
+                strcat(newForwardSelectorName, forwardSelectorName);
+                SEL newForwardSelector = sel_getUid(newForwardSelectorName);
+                if(!class_respondsToSelector(klass, newForwardSelector)) {
+                    class_addMethod(klass, newForwardSelector, forwardInvocationOriginalImp, "v@:@");
+                }
+                
                 const char *selectorName = sel_getName(selector);
+                char newWaxSelectorName[strlen(selectorName) + 10];
+                strcpy(newWaxSelectorName, "WAX");
+                strcat(newWaxSelectorName, selectorName);
+                SEL newWaxSelector = sel_getUid(newWaxSelectorName);
+                if(!class_respondsToSelector(klass, newWaxSelector)) {
+                    class_addMethod(klass, newWaxSelector, imp, typeDescription);
+                }
+                
                 char newSelectorName[strlen(selectorName) + 10];
                 strcpy(newSelectorName, "ORIG");
                 strcat(newSelectorName, selectorName);
@@ -913,8 +979,28 @@ static BOOL overrideMethod(lua_State *L, wax_instance_userdata *instanceUserdata
                 }
                 success = YES;
             } else if(metaImp) {
-                IMP prevImp = class_replaceMethod(metaclass, selector, imp, typeDescription);
+                IMP prevImp = class_replaceMethod(metaclass, selector, class_getMethodImplementation(metaclass, @selector(testesss)), typeDescription);
+                IMP forwardInvocationOriginalImp = class_replaceMethod(metaclass, @selector(forwardInvocation:), (IMP)myForwardInvocation, "v@:@");
+                
+                //Put the original invocation method
+                const char *forwardSelectorName = sel_getName(@selector(forwardInvocation:));
+                char newForwardSelectorName[strlen(forwardSelectorName) + 10];
+                strcpy(newForwardSelectorName, "ORIG");
+                strcat(newForwardSelectorName, forwardSelectorName);
+                SEL newForwardSelector = sel_getUid(newForwardSelectorName);
+                if(!class_respondsToSelector(metaclass, newForwardSelector)) {
+                    class_addMethod(metaclass, newForwardSelector, forwardInvocationOriginalImp, "v@:@");
+                }
+                
                 const char *selectorName = sel_getName(selector);
+                char newWaxSelectorName[strlen(selectorName) + 10];
+                strcpy(newWaxSelectorName, "WAX");
+                strcat(newWaxSelectorName, selectorName);
+                SEL newWaxSelector = sel_getUid(newWaxSelectorName);
+                if(!class_respondsToSelector(metaclass, newWaxSelector)) {
+                    class_addMethod(metaclass, newWaxSelector, imp, typeDescription);
+                }
+                
                 char newSelectorName[strlen(selectorName) + 10];
                 strcpy(newSelectorName, "ORIG");
                 strcat(newSelectorName, selectorName);
@@ -925,7 +1011,30 @@ static BOOL overrideMethod(lua_State *L, wax_instance_userdata *instanceUserdata
                 success = YES;
             } else {
                 // add to both instance and class method
-                success = class_addMethod(klass, selector, imp, typeDescription) && class_addMethod(metaclass, selector, imp, typeDescription);
+                const char *selectorName = sel_getName(selector);
+                char newWaxSelectorName[strlen(selectorName) + 10];
+                strcpy(newWaxSelectorName, "WAX");
+                strcat(newWaxSelectorName, selectorName);
+                
+                IMP forwardInvocationOriginalImpKlass = class_replaceMethod(klass, @selector(forwardInvocation:), (IMP)myForwardInvocation, "v@:@");
+                
+                IMP forwardInvocationOriginalImpMetaClass = class_replaceMethod(metaclass, @selector(forwardInvocation:), (IMP)myForwardInvocation, "v@:@");
+                
+                const char *forwardSelectorName = sel_getName(@selector(forwardInvocation:));
+                char newForwardSelectorName[strlen(forwardSelectorName) + 10];
+                strcpy(newForwardSelectorName, "ORIG");
+                strcat(newForwardSelectorName, forwardSelectorName);
+                SEL newForwardSelector = sel_getUid(newForwardSelectorName);
+                if(!class_respondsToSelector(metaclass, newForwardSelector)) {
+                    class_addMethod(klass, newForwardSelector, forwardInvocationOriginalImpKlass, "v@:@");
+                    class_addMethod(metaclass, newForwardSelector, forwardInvocationOriginalImpMetaClass, "v@:@");
+                }
+                
+                SEL newWaxSelector = sel_getUid(newWaxSelectorName);
+                success = class_addMethod(klass, selector, class_getMethodImplementation(klass, @selector(testesss)), typeDescription) && class_addMethod(metaclass, selector, class_getMethodImplementation(klass, @selector(testesss)), typeDescription);
+                
+                success = class_addMethod(klass, newWaxSelector, imp, typeDescription) && class_addMethod(metaclass, newWaxSelector, imp, typeDescription);
+//                success = class_addMethod(klass, selector, imp, typeDescription) && class_addMethod(metaclass, selector, imp, typeDescription);
             }
 			
 			free(typeDescription);

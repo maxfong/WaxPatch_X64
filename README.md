@@ -5,4 +5,4 @@
 
 arm64设备crash问题已修复
 
-arm64设备 delegate crash问题正在修复...
+arm64设备 delegate crash问题已修复
