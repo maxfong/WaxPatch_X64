@@ -17,6 +17,7 @@
 #import "wax_server.h"
 #import "wax_stdlib.h"
 #import "wax_stdlib_64.h"
+#import "wax_block.h"
 
 #import "lauxlib.h"
 #import "lobject.h"
@@ -80,6 +81,8 @@ void wax_setup() {
 
 void wax_start(char* initScript, lua_CFunction extensionFunction, ...) {
 	wax_setup();
+    
+    [[wax_block sharedManager] start];
 	
 	lua_State *L = wax_currentLuaState();
 	

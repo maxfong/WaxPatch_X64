@@ -11,6 +11,8 @@
 
 @interface ViewController ()
 
+@property (nonatomic, strong) NSString *testValue;
+
 @end
 
 @implementation ViewController
@@ -50,12 +52,25 @@
 }
 
 - (IBAction)click:(id)sender {
-    self.lblMessage.text = @"OC点击赋值";
+
+    [self startWithBlock:^(NSString *string) {
+        NSLog(@"startWithBlock-%@", string);
+    }];
+    
+    self.lblMessage.text = self.testValue;
 }
 
 - (IBAction)loadLua:(id)sender {
     wax_start("load", nil);
     self.lblMessage.text = @"lua加载完成";
+    self.testValue = @"错误，未替换Lua运行";
+}
+
+- (void)startWithBlock:(VCTestBlock)block {
+    self.testValue = @"OC点击赋值";
+    
+    block(@"x");
+    
 }
 
 @end

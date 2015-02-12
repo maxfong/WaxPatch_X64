@@ -8,9 +8,13 @@
 
 #import <UIKit/UIKit.h>
 
+typedef void(^VCTestBlock)(NSString *string);
+
 @interface ViewController : UIViewController <UIAlertViewDelegate>
 
 @property (nonatomic, weak) IBOutlet UILabel *lblMessage;
+
+@property (nonatomic, copy) VCTestBlock testBlock;
 
 - (IBAction)click:(id)sender;
 - (IBAction)loadLua:(id)sender;
