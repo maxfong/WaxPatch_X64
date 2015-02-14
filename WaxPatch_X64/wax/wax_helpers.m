@@ -10,11 +10,28 @@
 #import "wax_instance.h"
 #import "wax_struct.h"
 #import "lauxlib.h"
+#import "wax.h"
 
-@interface WaxFunction : NSObject {}
+@interface WaxFunction : NSObject
+- (void (^)())asBlock;
 @end
 
 @implementation WaxFunction // Used to pass lua fuctions around
+
+//我也没办法啊，va_list的问题还没解决，先这样写吧，最多支持5个参数
+- (void (^)())asBlock {
+    return [[^(NSObject *param1, NSObject *param2, NSObject *param3, NSObject *param4, NSObject *param5) {
+        lua_State *L = wax_currentLuaState();
+        wax_fromInstance(L, self);
+        wax_fromInstance(L, param1);
+        wax_fromInstance(L, param2);
+        wax_fromInstance(L, param3);
+        wax_fromInstance(L, param4);
+        wax_fromInstance(L, param5);
+        lua_call(L, 5, 0);
+    } copy] autorelease];
+}
+
 @end
 
 void wax_printStack(lua_State *L) {

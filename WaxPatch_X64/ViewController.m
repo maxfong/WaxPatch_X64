@@ -50,12 +50,18 @@
 }
 
 - (IBAction)click:(id)sender {
-    self.lblMessage.text = @"OC点击赋值";
+    self.lblMessage.text = @"OC赋值";
 }
 
 - (IBAction)loadLua:(id)sender {
     wax_start("load", nil);
-    self.lblMessage.text = @"lua加载完成";
+    UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"Tip" message:@"lua脚本加载结束" delegate:nil cancelButtonTitle:@"OK" otherButtonTitles:nil, nil];
+    [alert show];
+}
+
+//模拟测试Block
+- (void)testCallBlock:(void (^)(NSString *str))block {
+    block(@"Block alert");
 }
 
 @end

@@ -92,7 +92,6 @@
 		A91734691A839C4A00C887B8 /* WaxPatch_X64Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WaxPatch_X64Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A917346E1A839C4A00C887B8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A917346F1A839C4A00C887B8 /* WaxPatch_X64Tests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WaxPatch_X64Tests.m; sourceTree = "<group>"; };
-		A91734791A839CA400C887B8 /* ProtocolLoader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ProtocolLoader.h; sourceTree = "<group>"; };
 		A917347D1A839CA400C887B8 /* wax_filesystem.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = wax_filesystem.h; sourceTree = "<group>"; };
 		A917347E1A839CA400C887B8 /* wax_filesystem.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = wax_filesystem.m; sourceTree = "<group>"; };
 		A91734801A839CA400C887B8 /* wax_http.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = wax_http.h; sourceTree = "<group>"; };
@@ -192,6 +191,7 @@
 		A91734E21A839CA400C887B8 /* wax_struct.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = wax_struct.m; sourceTree = "<group>"; };
 		A942FE631A83A38C005E11B0 /* load.lua */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = load.lua; sourceTree = "<group>"; };
 		A942FE641A83A38C005E11B0 /* ViewController.lua */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ViewController.lua; sourceTree = "<group>"; };
+		A947BDBB1A8E35E300258A27 /* ProtocolLoader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ProtocolLoader.h; sourceTree = "<group>"; };
 		A9CE6BBF1A8457F70051A2ED /* wax_stdlib_64.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = wax_stdlib_64.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -237,7 +237,6 @@
 				A942FE631A83A38C005E11B0 /* load.lua */,
 				A942FE641A83A38C005E11B0 /* ViewController.lua */,
 				A917347A1A839CA400C887B8 /* wax */,
-				A91734791A839CA400C887B8 /* ProtocolLoader.h */,
 				A91734571A839C4A00C887B8 /* AppDelegate.h */,
 				A91734581A839C4A00C887B8 /* AppDelegate.m */,
 				A917345A1A839C4A00C887B8 /* ViewController.h */,
@@ -279,6 +278,7 @@
 		A917347A1A839CA400C887B8 /* wax */ = {
 			isa = PBXGroup;
 			children = (
+				A947BDBB1A8E35E300258A27 /* ProtocolLoader.h */,
 				A917347B1A839CA400C887B8 /* extensions */,
 				A917349E1A839CA400C887B8 /* lua */,
 				A91734D41A839CA400C887B8 /* wax.h */,
@@ -716,6 +716,7 @@
 				INFOPLIST_FILE = WaxPatch_X64/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				VALID_ARCHS = "arm64 armv7s armv7";
 			};
 			name = Debug;
 		};
@@ -726,6 +727,7 @@
 				INFOPLIST_FILE = WaxPatch_X64/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				VALID_ARCHS = "arm64 armv7s armv7";
 			};
 			name = Release;
 		};

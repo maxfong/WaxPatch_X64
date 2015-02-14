@@ -1,8 +1,12 @@
 waxClass{"ViewController", UIViewController}
 
 function click(self, sender)
-local alert = UIAlertView:initWithTitle_message_delegate_cancelButtonTitle_otherButtonTitles("Tip", "Lua动态赋值", self, "OK", nil)
-alert:show()
+
+
+self:testCallBlock(toobjc(function ( str ,null)
+	local alert = UIAlertView:initWithTitle_message_delegate_cancelButtonTitle_otherButtonTitles("TTT", str, self, "OK", nil)
+	alert:show()
+end):asBlock())
 end
 
 function alertView_clickedButtonAtIndex(self, alertView, buttonIndex)
