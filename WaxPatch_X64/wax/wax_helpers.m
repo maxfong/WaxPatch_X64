@@ -10,11 +10,33 @@
 #import "wax_instance.h"
 #import "wax_struct.h"
 #import "lauxlib.h"
+#import "wax.h"
 
 @interface WaxFunction : NSObject {}
 @end
 
 @implementation WaxFunction // Used to pass lua fuctions around
+
+- (void (^)())asBlock {
+    return [[^(NSObject *param1, ...) {
+        lua_State *L = wax_currentLuaState();
+        wax_fromInstance(L, self);
+        int i = 1; NSObject *tmpObj = param1;
+        wax_fromInstance(L, param1);
+        va_list ap;
+        while (YES) {
+            //x64 有问题
+            va_start (ap, param1);
+            NSObject *obj = va_arg(ap, NSObject *);
+            if (obj == tmpObj) break;
+            i++; tmpObj = obj;
+            wax_fromInstance(L, obj);
+            va_end (ap);
+        }
+        lua_call(L, i, 0);
+    } copy] autorelease];
+}
+
 @end
 
 void wax_printStack(lua_State *L) {
